@@ -11,7 +11,7 @@ import { useState, useMemo, useEffect } from "react";
 const CATEGORIES = ["Travel", "Meals", "Software", "Office Supplies", "Marketing", "Training", "Utilities", "Other"];
 const STATUS_COLORS = { Pending: "#F59E0B", Approved: "#10B981", Rejected: "#EF4444" };
 const STATUS_BG    = { Pending: "#FEF3C7", Approved: "#D1FAE5", Rejected: "#FEE2E2" };
-
+const ADMIN_EMAILS = ["xilliherb@gmail.com"];
 const initialExpenses = [
   { id: 1, employee: "Alice",  category: "Travel",         amount: 4500,  date: "2026-04-10", description: "Client visit to Mumbai",       status: "Approved", receipt: true  },
   { id: 2, employee: "Bob",    category: "Meals",          amount: 1200,  date: "2026-04-12", description: "Team lunch",                   status: "Pending",  receipt: true  },
@@ -157,7 +157,7 @@ export default function ExpenseTracker() {
   const [selected,    setSelected]    = useState(null);
   const [form,        setForm]        = useState({ employee: "", category: CATEGORIES[0], amount: "", date: "", description: "", receipt: false });
   const [formError,   setFormError]   = useState("");
-
+  const isAdmin = ADMIN_EMAILS.includes(currentUser?.email);
   // Pre-fill employee name from logged-in user
   useEffect(() => {
     if (currentUser) setForm(f => ({ ...f, employee: currentUser.name }));
@@ -186,7 +186,7 @@ export default function ExpenseTracker() {
 
   const handleSubmit = () => {
     if (!form.amount || !form.date || !form.description || !form.employee) { setFormError("Please fill all required fields."); return; }
-    setExpenses(prev => [{ ...form, id: Date.now(), amount: parseFloat(form.amount), status: "Pending" }, ...prev]);
+    setExpenses(prev => [{ ...form, id: Date.now(), amount: Number(form.amount) || 0, status: "Pending" }, ...prev]);
     setShowForm(false);
     setForm({ employee: currentUser.name, category: CATEGORIES[0], amount: "", date: "", description: "", receipt: false });
     setFormError("");
@@ -216,7 +216,9 @@ export default function ExpenseTracker() {
               <div style={{ width: 32, height: 32, borderRadius: "50%", background: avatarBg(currentUser.name), display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 13, color: "#fff" }}>{currentUser.name[0].toUpperCase()}</div>
               <div>
                 <div style={{ color: "#F1F5F9", fontSize: 13, fontWeight: 600 }}>{currentUser.name}</div>
-                <div style={{ color: "#6366F1", fontSize: 11, fontWeight: 600 }}>{currentUser.email || currentUser.role}</div>
+                <div style={{ color: "#6366F1", fontSize: 11, fontWeight: 600 }}>
+  {currentUser.email} ({isAdmin ? "Admin" : "User"})
+</div>
               </div>
             </div>
             <button onClick={() => setShowForm(true)} style={{ background: "linear-gradient(135deg,#6366F1,#8B5CF6)", color: "#fff", border: "none", borderRadius: 10, padding: "8px 18px", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>+ New Expense</button>
@@ -226,7 +228,19 @@ export default function ExpenseTracker() {
       </div>
 
       <div style={{ maxWidth: 1120, margin: "0 auto", padding: "28px 32px" }}>
-
+{!isAdmin && (
+  <div style={{
+    marginBottom: 12,
+    padding: "10px 14px",
+    background: "#FEF3C7",
+    color: "#92400E",
+    borderRadius: 8,
+    fontSize: 13,
+    fontWeight: 600
+  }}>
+    ℹ️ You can submit expenses. Only admins can approve or reject them.
+  </div>
+)}
         {/* ── Stats ── */}
         <div style={{ display: "flex", gap: 14, marginBottom: 28, flexWrap: "wrap" }}>
           <StatCard label="Total Submitted" value={formatINR(totalAll)}      sub={`${expenses.length} expenses`} />
@@ -279,7 +293,7 @@ export default function ExpenseTracker() {
                   <td style={{ padding: "13px 16px" }}>
                     <div style={{ display: "flex", gap: 5 }}>
                       <button onClick={() => setSelected(e)} style={{ padding: "4px 11px", borderRadius: 7, border: "1.5px solid #E2E8F0", background: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "#6366F1" }}>View</button>
-                      {e.status === "Pending" && <>
+                      {e.status === "Pending" && isAdmin && <>
                         <button onClick={() => changeStatus(e.id,"Approved")} style={{ padding: "4px 9px", borderRadius: 7, border: "none", background: "#D1FAE5", fontSize: 12, fontWeight: 700, cursor: "pointer", color: "#059669" }}>✓</button>
                         <button onClick={() => changeStatus(e.id,"Rejected")} style={{ padding: "4px 9px", borderRadius: 7, border: "none", background: "#FEE2E2", fontSize: 12, fontWeight: 700, cursor: "pointer", color: "#DC2626" }}>✕</button>
                       </>}
@@ -304,7 +318,7 @@ export default function ExpenseTracker() {
             <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: "#64748B", display: "block", marginBottom: 5 }}>Employee Name *</label>
-                <input value={form.employee} onChange={e => setForm(f=>({...f,employee:e.target.value}))} placeholder="Your name" style={inp} />
+                <input value={form.employee} disabled onChange={e => setForm(f=>({...f,employee:e.target.value}))} placeholder="Your name" style={inp} />
               </div>
               <div style={{ display: "flex", gap: 12 }}>
                 <div style={{ flex: 1 }}>
@@ -360,7 +374,7 @@ export default function ExpenseTracker() {
                 <span style={{ color: "#0F172A", fontWeight: 500 }}>{v}</span>
               </div>
             ))}
-            {selected.status === "Pending" && (
+            {selected.status === "Pending" && isAdmin && (
               <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
                 <button onClick={() => changeStatus(selected.id,"Approved")} style={{ flex: 1, padding: 12, borderRadius: 10, border: "none", background: "#D1FAE5", color: "#059669", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>✓ Approve</button>
                 <button onClick={() => changeStatus(selected.id,"Rejected")} style={{ flex: 1, padding: 12, borderRadius: 10, border: "none", background: "#FEE2E2", color: "#DC2626", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>✕ Reject</button>
