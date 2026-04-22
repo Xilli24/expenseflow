@@ -1,5 +1,5 @@
 [build]
-  command = "npm install vite @vitejs/plugin-react && npm run build"
+  command = "node node_modules/vite/bin/vite.js build"
   publish = "dist"
 
 [[redirects]]
