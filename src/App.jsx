@@ -149,7 +149,42 @@ function LoginPage({ onLogin }) {
 // ── Main App ──────────────────────────────────────────────────────────────────
 export default function ExpenseTracker() {
   const [currentUser, setCurrentUser] = useState(null);
-  const [expenses,    setExpenses]    = useState(initialExpenses);
+  const [expenses, setExpenses] = useState([]);
+
+useEffect(() => {
+  // 1. Initial load
+  fetchExpenses();
+
+  // 2. Start listening to database changes
+  const channel = supabase
+    .channel("expenses")
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "expenses",
+      },
+      () => {
+        fetchExpenses(); // refresh when anything changes
+      }
+    )
+    .subscribe();
+
+  // 3. Cleanup when component unmounts
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}, []);
+
+const fetchExpenses = async () => {
+  const { data, error } = await supabase
+    .from("expenses")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (!error) setExpenses(data);
+};
   const [filter,      setFilter]      = useState("All");
   const [catFilter,   setCatFilter]   = useState("All");
   const [search,      setSearch]      = useState("");
@@ -184,18 +219,59 @@ export default function ExpenseTracker() {
   const totalPending  = expenses.filter(e => e.status === "Pending").reduce((a, b) => a + b.amount, 0);
   const totalRejected = expenses.filter(e => e.status === "Rejected").reduce((a, b) => a + b.amount, 0);
 
-  const handleSubmit = () => {
-    if (!form.amount || !form.date || !form.description || !form.employee) { setFormError("Please fill all required fields."); return; }
-    setExpenses(prev => [{ ...form, id: Date.now(), amount: Number(form.amount) || 0, status: "Pending" }, ...prev]);
-    setShowForm(false);
-    setForm({ employee: currentUser.name, category: CATEGORIES[0], amount: "", date: "", description: "", receipt: false });
-    setFormError("");
-  };
+  const handleSubmit = async () => {
+  // 1. Validation
+  if (!form.amount || !form.date || !form.description || !form.employee) {
+    setFormError("Please fill all required fields.");
+    return;
+  }
 
-  const changeStatus = (id, status) => {
-    setExpenses(prev => prev.map(e => e.id === id ? { ...e, status } : e));
-    if (selected?.id === id) setSelected(prev => ({ ...prev, status }));
-  };
+  // 2. Insert into Supabase
+  const { data, error } = await supabase
+    .from("expenses")
+    .insert([
+      {
+        employee: form.employee,
+        category: form.category,
+        amount: parseFloat(form.amount),
+        date: form.date,
+        description: form.description,
+        receipt: form.receipt,
+        status: "Pending",
+      },
+    ]);
+
+  // 3. Handle error
+  if (error) {
+    console.error("Insert error:", error);
+    setFormError("Failed to save expense.");
+    return;
+  }
+
+  // 4. Success → refresh list
+  await fetchExpenses();
+
+  // 5. Reset form
+  setShowForm(false);
+  setForm({
+    employee: currentUser.name,
+    category: CATEGORIES[0],
+    amount: "",
+    date: "",
+    description: "",
+    receipt: false,
+  });
+  setFormError("");
+};
+
+  const changeStatus = async (id, status) => {
+  await supabase
+    .from("expenses")
+    .update({ status })
+    .eq("id", id);
+
+  fetchExpenses();
+};
 
   const inp = { padding: "10px 14px", borderRadius: 10, border: "1.5px solid #E2E8F0", fontSize: 14, width: "100%", boxSizing: "border-box", fontFamily: "inherit", background: "#F8FAFC", outline: "none", color: "#0F172A" };
   const avatarBg = name => `hsl(${(name || "?").charCodeAt(0) * 15},60%,60%)`;
